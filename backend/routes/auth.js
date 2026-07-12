@@ -10,10 +10,10 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
     if (!name || !email || !phone || !password) return res.status(400).json({ error: 'All fields required' });
-    const existing = await db.queryOne('SELECT id FROM users WHERE email = $1', [email]);
+    const existing = await db.queryOne('SELECT id FROM users WHERE email = ?', [email]);
     if (existing) return res.status(400).json({ error: 'Email already registered' });
     const hashed = bcrypt.hashSync(password, 10);
-    const result = await db.run('INSERT INTO users (name, email, phone, password) VALUES ($1, $2, $3, $4)', [name, email, phone, hashed]);
+    const result = await db.run('INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)', [name, email, phone, hashed]);
     const token = jwt.sign({ id: result.lastInsertRowid, name, email, phone, role: 'customer' }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: result.lastInsertRowid, name, email, phone, role: 'customer' } });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await db.queryOne('SELECT * FROM users WHERE email = $1', [email]);
+    const user = await db.queryOne('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
     if (user.status !== 'active') return res.status(403).json({ error: 'Account is blocked' });
     if (!bcrypt.compareSync(password, user.password)) return res.status(400).json({ error: 'Invalid credentials' });
@@ -33,7 +33,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await db.queryOne('SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = $1', [req.user.id]);
+    const user = await db.queryOne('SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
   } catch (e) { res.status(500).json({ error: e.message }); }

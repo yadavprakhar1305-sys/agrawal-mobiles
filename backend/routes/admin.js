@@ -6,13 +6,13 @@ const router = express.Router();
 
 router.get('/dashboard', auth, adminOnly, async (req, res) => {
   try {
-    const totalProducts = (await db.queryOne("SELECT COUNT(*)::int as count FROM products")).count;
-    const totalOrders = (await db.queryOne("SELECT COUNT(*)::int as count FROM orders")).count;
-    const totalUsers = (await db.queryOne("SELECT COUNT(*)::int as count FROM users WHERE role='customer'")).count;
+    const totalProducts = (await db.queryOne("SELECT COUNT(*) as count FROM products")).count;
+    const totalOrders = (await db.queryOne("SELECT COUNT(*) as count FROM orders")).count;
+    const totalUsers = (await db.queryOne("SELECT COUNT(*) as count FROM users WHERE role='customer'")).count;
     const totalRevenue = (await db.queryOne("SELECT COALESCE(SUM(total),0) as total FROM orders WHERE status != 'cancelled'")).total;
-    const pendingSellRequests = (await db.queryOne("SELECT COUNT(*)::int as count FROM sell_requests WHERE status='pending'")).count;
+    const pendingSellRequests = (await db.queryOne("SELECT COUNT(*) as count FROM sell_requests WHERE status='pending'")).count;
     const recentOrders = await db.queryAll("SELECT o.*, u.name as user_name FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT 5");
-    res.json({ totalProducts, totalOrders, totalUsers, totalRevenue, pendingSellRequests, recentOrders: recentOrders.map(o => ({...o, items: o.items})), salesByBrand: [] });
+    res.json({ totalProducts, totalOrders, totalUsers, totalRevenue, pendingSellRequests, recentOrders: recentOrders.map(o => ({...o, items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items})), salesByBrand: [] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -20,22 +20,23 @@ router.get('/orders', auth, adminOnly, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const limitNum = parseInt(limit), offset = (parseInt(page) - 1) * limitNum;
+    const parseItems = o => ({...o, items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items});
     if (status) {
-      const orders = await db.queryAll('SELECT o.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.status = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3', [status, limitNum, offset]);
-      const total = (await db.queryOne('SELECT COUNT(*)::int as count FROM orders WHERE status = $1', [status])).count;
-      return res.json({ orders: orders.map(o => ({...o, items: o.items})), total, page: parseInt(page), pages: Math.ceil(total / limitNum) });
+      const orders = await db.queryAll('SELECT o.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE o.status = ? ORDER BY o.created_at DESC LIMIT ? OFFSET ?', [status, limitNum, offset]);
+      const total = (await db.queryOne('SELECT COUNT(*) as count FROM orders WHERE status = ?', [status])).count;
+      return res.json({ orders: orders.map(parseItems), total, page: parseInt(page), pages: Math.ceil(total / limitNum) });
     }
-    const orders = await db.queryAll('SELECT o.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT $1 OFFSET $2', [limitNum, offset]);
-    const total = (await db.queryOne('SELECT COUNT(*)::int as count FROM orders')).count;
-    res.json({ orders: orders.map(o => ({...o, items: o.items})), total, page: parseInt(page), pages: Math.ceil(total / limitNum) });
+    const orders = await db.queryAll('SELECT o.*, u.name as user_name, u.email as user_email, u.phone as user_phone FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?', [limitNum, offset]);
+    const total = (await db.queryOne('SELECT COUNT(*) as count FROM orders')).count;
+    res.json({ orders: orders.map(parseItems), total, page: parseInt(page), pages: Math.ceil(total / limitNum) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.put('/orders/:id/status', auth, adminOnly, async (req, res) => {
   try {
     const { status, notes } = req.body;
-    await db.run('UPDATE orders SET status = $1, notes = COALESCE($2, notes) WHERE id = $3', [status, notes, req.params.id]);
-    await db.run('INSERT INTO admin_logs (admin_id, action, details) VALUES ($1, $2, $3)', [req.user.id, 'update_order', `Updated order ${req.params.id} to status: ${status}`]);
+    await db.run('UPDATE orders SET status = ?, notes = COALESCE(?, notes) WHERE id = ?', [status, notes, req.params.id]);
+    await db.run('INSERT INTO admin_logs (admin_id, action, details) VALUES (?, ?, ?)', [req.user.id, 'update_order', `Updated order ${req.params.id} to status: ${status}`]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -50,7 +51,7 @@ router.get('/users', auth, adminOnly, async (req, res) => {
 router.put('/users/:id/status', auth, adminOnly, async (req, res) => {
   try {
     const { status } = req.body;
-    await db.run('UPDATE users SET status = $1 WHERE id = $2', [status, req.params.id]);
+    await db.run('UPDATE users SET status = ? WHERE id = ?', [status, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -72,7 +73,7 @@ router.get('/sell-requests', auth, adminOnly, async (req, res) => {
 router.put('/sell-requests/:id', auth, adminOnly, async (req, res) => {
   try {
     const { status, admin_notes } = req.body;
-    await db.run('UPDATE sell_requests SET status = $1, admin_notes = COALESCE($2, admin_notes) WHERE id = $3', [status, admin_notes, req.params.id]);
+    await db.run('UPDATE sell_requests SET status = ?, admin_notes = COALESCE(?, admin_notes) WHERE id = ?', [status, admin_notes, req.params.id]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
