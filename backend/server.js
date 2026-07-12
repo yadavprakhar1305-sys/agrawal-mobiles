@@ -10,7 +10,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Wait for DB to be ready
 app.use(async (req, res, next) => {
-  await db.readyPromise;
+  try { await db.readyPromise; } catch (e) { return res.status(500).json({ error: 'Database initialization failed' }); }
   next();
 });
 
