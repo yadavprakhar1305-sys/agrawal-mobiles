@@ -4,8 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd frontend && npm install && npm run build
-    startCommand: cd backend && npm install && node server.js
+    buildCommand: cd backend && npm install && cd ../frontend && npm install && npm run build
+    startCommand: cd backend && node server.js
     healthCheckPath: /api/products
     envVars:
       - key: DATABASE_URL
@@ -14,8 +14,6 @@ services:
           property: connectionString
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "10000"
 
 databases:
   - name: agrawal-mobiles-db
