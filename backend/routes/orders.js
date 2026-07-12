@@ -9,7 +9,7 @@ router.post('/', auth, async (req, res) => {
     if (!items || !address || !city || !pincode || !phone || !payment_method) return res.status(400).json({ error: 'Missing required fields' });
     const orderNo = 'ORD-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     const result = await db.run('INSERT INTO orders (order_no, user_id, items, total, address, city, pincode, phone, payment_method, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
-      [orderNo, req.user.id, JSON.stringify(items), total, address, city, pincode, phone, payment_method, notes || '']);
+      [orderNo, req.user.id, items, total, address, city, pincode, phone, payment_method, notes || '']);
 
     await db.run('DELETE FROM carts WHERE user_id = $1', [req.user.id]);
 
